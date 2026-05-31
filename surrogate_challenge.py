@@ -88,7 +88,7 @@ def fit_surrogate(train_df, feature_names, teacher):
     print(f"Top forest drivers: {[str(f) for f in ranked[-3:][::-1]]}")
 
     # Regression target for the surrogate.
-    target = sample["target"].values
+    target = teacher.predict(sample[feature_names].values)
 
     param_grid = {
         "n_estimators": [300, 600],
@@ -104,10 +104,17 @@ def fit_surrogate(train_df, feature_names, teacher):
     )
     search = GridSearchCV(base, param_grid, scoring="r2", cv=5, n_jobs=-1)
     search.fit(X, target)
-
     print(f"Best CV score (R^2): {search.best_score_:.4f}")
-    print(f"Best params       : {search.best_params_}")
-    return search.best_estimator_, scaler
+    print(f"Best params : {search.best_params_}")
+
+    # Refit best model on FULL training data, not just the 50% sample
+    scaler_full = StandardScaler().fit(train_df[feature_names])
+    X_full = scaler_full.transform(train_df[feature_names])
+    target_full = teacher.predict(train_df[feature_names].values)
+    best = search.best_estimator_
+    best.fit(X_full, target_full)
+
+    return best, scaler_full
 
 
 def evaluate(teacher, surrogate, scaler, X_test, y_test, feature_names):
